@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RouteIQ — Smart Navigation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --surface: rgba(13, 17, 28, 0.95);
+      --surface2: rgba(20, 26, 42, 0.9);
+      --border: rgba(255,255,255,0.07);
+      --border-active: rgba(99,179,237,0.45);
+      --accent: #63b3ed;
+      --best: #68d391;
+      --worst: #fc8181;
+      --mid: #f6ad55;
+      --text: #e2e8f0;
+      --text-muted: #718096;
+      --text-dim: #4a5568;
+      --panel-w: 360px;
+      --radius: 14px;
+      --mono: 'DM Mono', monospace;
+      --display: 'Syne', sans-serif;
+      --body: 'DM Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: var(--body); background: var(--bg); color: var(--text); }
+
+    /* MAP — explicit dimensions are critical */
+    #map {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+
+    /* LEFT PANEL */
+    #panel-left {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: var(--panel-w);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-right: 1px solid var(--border);
+    }
+    #panel-header { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .logo { font-family: var(--display); font-weight: 800; font-size: 21px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+    .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 2.4s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.65)} }
+    .logo-sub { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 2.5px; text-transform: uppercase; margin-top: 3px; }
+
+    #inputs { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .input-wrap { position: relative; margin-bottom: 9px; }
+    .input-ico { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 13px; pointer-events: none; z-index: 1; }
+    .route-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 10px 34px; font-family: var(--body); font-size: 13.5px; color: var(--text); outline: none; transition: border-color .2s, background .2s; }
+    .route-input::placeholder { color: var(--text-dim); }
+    .route-input:focus { border-color: var(--border-active); background: rgba(99,179,237,0.04); }
+
+    .controls-row { display: flex; gap: 7px; align-items: center; }
+    .mode-btn { flex: 1; padding: 9px 2px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-muted); font-size: 16px; cursor: pointer; transition: all .2s; text-align: center; }
+    .mode-btn:hover { border-color: rgba(255,255,255,.15); color: var(--text); }
+    .mode-btn.active { background: rgba(99,179,237,.12); border-color: var(--accent); color: var(--accent); }
+    #btn-go { flex: 2; padding: 10px 12px; border: none; border-radius: 10px; background: var(--accent); color: #060a12; font-family: var(--display); font-weight: 700; font-size: 13px; cursor: pointer; transition: all .2s; }
+    #btn-go:hover:not(:disabled) { background: #90cdf4; transform: translateY(-1px); }
+    #btn-go:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    #weather-bar { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: none; }
+    #weather-bar.show { display: block; }
+    .wx-label { font-family: var(--mono); font-size: 9.5px; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 7px; }
+    .wx-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+    .wx-chip { display: flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 20px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); font-size: 12px; }
+    .wx-chip b { font-family: var(--mono); font-weight: 500; }
+    .wx-desc { margin-top: 5px; font-size: 11.5px; color: var(--text-muted); }
+
+    #wx-mode-selector { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .wx-mode-label { font-family: var(--mono); font-size: 9.5px; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 7px; }
+    #wx-mode-select { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: var(--body); font-size: 12.5px; color: var(--text); outline: none; cursor: pointer; transition: border-color .2s, background .2s; }
+    #wx-mode-select:hover { border-color: rgba(255,255,255,.15); }
+    #wx-mode-select:focus { border-color: var(--border-active); background: rgba(99,179,237,0.04); }
+    #wx-mode-select option { background: #111827; color: var(--text); }
+
+    .wx-segments { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.04); }
+    .wx-seg { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+    .wx-seg-lbl { font-family: var(--mono); font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; min-width: 45px; }
+    .wx-seg-data { display: flex; align-items: center; gap: 6px; font-size: 12px; flex: 1; }
+    .wx-seg-data .emoji { font-size: 15px; }
+    .wx-seg-data .temp { font-family: var(--mono); font-weight: 500; }
+    .wx-seg-data .desc { color: var(--text-muted); }
+
+    .wx-metrics { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.04); }
+    .wx-metric-point { margin-bottom: 10px; }
+    .wx-metric-point:last-child { margin-bottom: 0; }
+    .wx-metric-hdr { font-family: var(--mono); font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 5px; }
+    .wx-metric-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+
+    .wx-table { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.04); }
+    .wx-table table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .wx-table th { font-family: var(--mono); font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; padding: 4px 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .wx-table td { padding: 6px 6px; border-bottom: 1px solid rgba(255,255,255,.02); }
+    .wx-table td:first-child { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+    .wx-table .emoji { font-size: 14px; }
+    .wx-table .temp { font-family: var(--mono); font-weight: 500; }
+
+    .wx-no-data { margin-top: 10px; padding: 8px 10px; border-top: 1px solid rgba(255,255,255,.04); font-size: 11px; color: var(--text-dim); text-align: center; }
+
+    #routes-area { flex: 1; overflow-y: auto; padding: 10px 10px 20px; }
+    #routes-area::-webkit-scrollbar { width: 3px; }
+    #routes-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
+
+    .sec-label { font-family: var(--mono); font-size: 9.5px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; padding: 6px 4px 10px; }
+    .ai-box { margin: 0 2px 10px; padding: 11px 13px; border-radius: 12px; background: rgba(99,179,237,0.06); border: 1px solid rgba(99,179,237,0.18); font-size: 12.5px; line-height: 1.55; }
+    .ai-box-lbl { font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
+
+    .route-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 13px 11px; margin-bottom: 8px; cursor: pointer; transition: border-color .2s, background .2s; background: var(--surface2); position: relative; overflow: hidden; }
+    .route-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--text-dim); }
+    .route-card.best::before { background: var(--best); }
+    .route-card.mid::before  { background: var(--mid);  }
+    .route-card.worst::before{ background: var(--worst);}
+    .route-card.sel { border-color: var(--border-active); background: rgba(99,179,237,.05); }
+    .route-card:hover { border-color: rgba(255,255,255,.12); }
+
+    .rc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+    .rc-name { font-family: var(--display); font-weight: 700; font-size: 14px; }
+    .rc-badge { font-family: var(--mono); font-size: 9.5px; padding: 2px 7px; border-radius: 20px; font-weight: 500; letter-spacing: .5px; }
+    .badge-best  { background: rgba(104,211,145,.12); color: var(--best); border: 1px solid rgba(104,211,145,.28); }
+    .badge-mid   { background: rgba(246,173,85,.12);  color: var(--mid);  border: 1px solid rgba(246,173,85,.28); }
+    .badge-worst { background: rgba(252,129,129,.12); color: var(--worst);border: 1px solid rgba(252,129,129,.28); }
+
+    .rc-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; margin-bottom: 9px; }
+    .stat-lbl { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; }
+    .stat-val { font-family: var(--mono); font-size: 14px; font-weight: 500; margin-top: 1px; }
+
+    .score-row { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+    .score-bg { flex:1; height:3px; background: rgba(255,255,255,.06); border-radius:3px; overflow:hidden; }
+    .score-fill { height:100%; border-radius:3px; transition: width .7s ease; }
+    .score-pct { font-family: var(--mono); font-size: 10px; color: var(--text-muted); min-width: 28px; text-align:right; }
+
+    .wx-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .wx-tag { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 7px; border-radius: 5px; background: rgba(255,255,255,.03); border: 1px solid var(--border); color: var(--text-muted); }
+    .wx-tag.warn   { color: var(--mid);   border-color: rgba(246,173,85,.3);  background: rgba(246,173,85,.05); }
+    .wx-tag.danger { color: var(--worst); border-color: rgba(252,129,129,.3); background: rgba(252,129,129,.05); }
+    .wx-tag.good   { color: var(--best);  border-color: rgba(104,211,145,.3); background: rgba(104,211,145,.05); }
+
+    .empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+    .empty-ico { font-size: 38px; margin-bottom: 12px; }
+
+    /* BOTTOM BAR */
+    #bottom-bar { position: fixed; bottom: 0; left: var(--panel-w); right: 0; z-index: 20; display: none; align-items: center; gap: 18px; padding: 10px 18px; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--border); }
+    #bottom-bar.show { display: flex; }
+    .bb-stat { display: flex; flex-direction: column; }
+    .bb-lbl { font-size: 9.5px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+    .bb-val { font-family: var(--mono); font-size: 15px; font-weight: 500; }
+    #bb-weather { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); }
+    #bb-weather .emoji { font-size: 14px; }
+    #bb-eta { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-left: auto; }
+    #btn-steps { padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); font-family: var(--body); font-size: 12px; cursor: pointer; transition: all .2s; }
+    #btn-steps:hover { border-color: var(--border-active); color: var(--accent); }
+
+    /* DIRECTIONS PANEL */
+    #dir-panel { position: fixed; right: 12px; top: 12px; width: 290px; max-height: calc(100vh - 80px); z-index: 20; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); display: none; flex-direction: column; overflow: hidden; }
+    #dir-panel.show { display: flex; }
+    #dir-hdr { padding: 11px 13px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .dir-title { font-family: var(--display); font-weight: 700; font-size: 13px; }
+    #dir-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; transition: color .2s; }
+    #dir-close:hover { color: var(--text); }
+    #dir-steps { overflow-y: auto; flex: 1; padding: 4px 0; }
+    #dir-steps::-webkit-scrollbar { width: 3px; }
+    #dir-steps::-webkit-scrollbar-thumb { background: rgba(255,255,255,.07); border-radius: 3px; }
+    .step-row { display: flex; gap: 9px; padding: 7px 13px; border-bottom: 1px solid rgba(255,255,255,.03); align-items: flex-start; }
+    .step-n { font-family: var(--mono); font-size: 10px; color: var(--text-dim); min-width: 16px; padding-top: 2px; }
+    .step-txt { font-size: 11.5px; line-height: 1.5; color: var(--text); }
+    .step-d { font-family: var(--mono); font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+    /* STREET VIEW PANEL */
+    #streetview-panel { position: fixed; right: 12px; bottom: 80px; width: 400px; height: 300px; z-index: 20; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); display: none; flex-direction: column; overflow: hidden; }
+    #streetview-panel.show { display: flex; }
+    #sv-hdr { padding: 11px 13px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: var(--surface2); }
+    .sv-title { font-family: var(--display); font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    #sv-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; transition: color .2s; }
+    #sv-close:hover { color: var(--text); }
+    #streetview { width: 100%; height: 100%; flex: 1; }
+    #sv-toggle { position: fixed; right: 12px; bottom: 12px; z-index: 20; padding: 10px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--text); font-family: var(--body); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .2s; display: none; }
+    #sv-toggle.show { display: block; }
+    #sv-toggle:hover { border-color: var(--border-active); background: rgba(99,179,237,0.08); }
+
+    /* LOADING */
+    #loading { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .6s; }
+    #loading.fade { opacity: 0; pointer-events: none; }
+    .ld-logo { font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: -1px; }
+    .ld-sub { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 2.5px; }
+    .ld-bar { width: 160px; height: 2px; background: rgba(255,255,255,.07); border-radius: 2px; overflow: hidden; }
+    .ld-fill { height: 100%; background: var(--accent); animation: ld 1.6s ease-in-out infinite; }
+    @keyframes ld { 0%{width:0;margin-left:0} 50%{width:100%;margin-left:0} 100%{width:0;margin-left:100%} }
+
+    .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(99,179,237,.2); border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; vertical-align: middle; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+
+    /* MODAL */
+    .modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .modal.show { display: flex; }
+    .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-width: 480px; width: 90%; padding: 0; animation: modalSlideIn 0.3s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+    @keyframes modalSlideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-header { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .modal-header .hazard-icon { font-size: 28px; }
+    .modal-header h3 { font-family: var(--display); font-weight: 700; font-size: 18px; flex: 1; margin: 0; }
+    .modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px; transition: color .2s; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 18px 20px; }
+    .modal-body p { margin: 0 0 12px; line-height: 1.6; }
+    #hazard-details { margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--border); font-size: 13px; }
+    .modal-actions { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
+    .modal-actions button { flex: 1; padding: 10px 16px; border-radius: 8px; font-family: var(--body); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .2s; }
+    .modal-actions button:first-child { background: var(--accent); color: #060a12; border: none; }
+    .modal-actions button:first-child:hover { background: #90cdf4; transform: translateY(-1px); }
+    .modal-actions button:last-child { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .modal-actions button:last-child:hover { border-color: var(--border-active); }
+
+    /* HAZARD MARKERS */
+    .hazard-marker { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); border: 2px solid white; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } }
+    .hazard-critical { background: #9333ea; }
+    .hazard-high { background: #fc8181; }
+    .hazard-medium { background: #f6ad55; }
+    .hazard-low { background: #fbbf24; }
+
+    /* NAV CONTROLS */
+    #nav-controls { padding: 10px 14px; border-bottom: 1px solid var(--border); display: none; gap: 8px; flex-wrap: wrap; }
+    #nav-controls.show { display: flex; }
+    #nav-controls button { flex: 1; min-width: 100px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--text); font-size: 12px; cursor: pointer; transition: all .2s; }
+    #nav-controls button:hover { border-color: var(--border-active); background: rgba(99,179,237,0.08); }
+    #nav-controls button.active { background: rgba(99,179,237,0.12); border-color: var(--accent); color: var(--accent); }
+    
+    #hazard-list { padding: 10px 14px; border-bottom: 1px solid var(--border); display: none; }
+    #hazard-list.show { display: block; }
+    .hazard-item { padding: 8px 10px; margin-bottom: 6px; background: rgba(255,255,255,0.03); border-left: 3px solid; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all .2s; }
+    .hazard-item:hover { background: rgba(255,255,255,0.06); }
+    .hazard-item.critical { border-left-color: #9333ea; }
+    .hazard-item.high { border-left-color: #fc8181; }
+    .hazard-item.medium { border-left-color: #f6ad55; }
+    .hazard-item.low { border-left-color: #fbbf24; }
+    .hazard-item-title { font-weight: 500; margin-bottom: 3px; }
+    .hazard-item-desc { color: var(--text-muted); font-size: 11px; }
+
+    /* DEMO MODE */
+    #demo-controls { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 30; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; display: none; gap: 12px; align-items: center; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+    #demo-controls.show { display: flex; }
+    .demo-label { font-family: var(--mono); font-size: 10px; color: var(--text-muted); letter-spacing: 1.5px; text-transform: uppercase; }
+    .demo-status { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(99,179,237,0.1); border-radius: 8px; border: 1px solid rgba(99,179,237,0.3); }
+    .demo-status .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse-demo 1.5s infinite; }
+    @keyframes pulse-demo { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
+    .demo-status-text { font-family: var(--display); font-weight: 700; font-size: 12px; color: var(--accent); }
+    .demo-progress { display: flex; align-items: center; gap: 8px; }
+    .demo-progress-bar { width: 120px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+    .demo-progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+    .demo-progress-text { font-family: var(--mono); font-size: 11px; color: var(--text-muted); min-width: 35px; }
+    #demo-speed { display: flex; align-items: center; gap: 6px; }
+    #demo-speed input { width: 80px; }
+    #demo-speed-val { font-family: var(--mono); font-size: 11px; color: var(--text); min-width: 25px; }
+    .demo-btn { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--text); font-size: 11px; font-weight: 500; cursor: pointer; transition: all .2s; }
+    .demo-btn:hover { border-color: var(--border-active); background: rgba(99,179,237,0.08); }
+    .demo-btn.active { background: rgba(99,179,237,0.15); border-color: var(--accent); color: var(--accent); }
+    #btn-demo-mode { position: fixed; top: 12px; right: 320px; z-index: 25; padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--text); font-family: var(--body); font-size: 12px; font-weight: 500; cursor: pointer; transition: all .2s; }
+    #btn-demo-mode:hover { border-color: var(--border-active); background: rgba(99,179,237,0.08); }
+    #btn-demo-mode.active { background: rgba(99,179,237,0.15); border-color: var(--accent); color: var(--accent); }
+
+    /* Autocomplete dark */
+    .pac-container { background: #111827 !important; border: 1px solid rgba(255,255,255,.1) !important; border-radius: 10px !important; margin-top: 4px; font-family: var(--body) !important; box-shadow: 0 16px 40px rgba(0,0,0,.6) !important; }
+    .pac-item { color: #e2e8f0 !important; border-top: 1px solid rgba(255,255,255,.06) !important; padding: 8px 12px !important; font-size: 13px !important; cursor: pointer; }
+    .pac-item:hover { background: rgba(255,255,255,.04) !important; }
+    .pac-item-query { color: #63b3ed !important; }
+    .pac-icon { display: none !important; }
+    .pac-matched { color: #63b3ed !important; }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="ld-logo">RouteIQ</div>
+  <div class="ld-sub">LOCATING YOU</div>
+  <div class="ld-bar"><div class="ld-fill"></div></div>
+</div>
+
+<!-- Map renders here — must exist in DOM before Maps JS inits -->
+<div id="map"></div>
+
+<button id="btn-demo-mode" onclick="toggleDemoMode()">🎮 Demo Mode</button>
+
+<div id="demo-controls">
+  <div class="demo-status">
+    <div class="pulse-dot"></div>
+    <span class="demo-status-text">DEMO ACTIVE</span>
+  </div>
+  <div class="demo-progress">
+    <span class="demo-label">Progress</span>
+    <div class="demo-progress-bar">
+      <div class="demo-progress-fill" id="demo-progress-fill"></div>
+    </div>
+    <span class="demo-progress-text" id="demo-progress-text">0%</span>
+  </div>
+  <div id="demo-speed">
+    <span class="demo-label">Speed</span>
+    <input type="range" min="10" max="100" value="50" id="demo-speed-slider" oninput="updateDemoSpeed(this.value)">
+    <span id="demo-speed-val">50</span>
+  </div>
+  <button class="demo-btn" onclick="pauseDemo()">⏸ Pause</button>
+  <button class="demo-btn" onclick="generateRandomHazard()">⚠️ Add Hazard</button>
+</div>
+
+<div id="panel-left">
+  <div id="panel-header">
+    <div class="logo"><div class="logo-dot"></div>RouteIQ</div>
+    <div class="logo-sub">Weather-Smart Navigation</div>
+  </div>
+  <div id="inputs">
+    <div class="input-wrap">
+      <span class="input-ico">📍</span>
+      <input id="inp-start" class="route-input" placeholder="Starting point" />
+    </div>
+    <div class="input-wrap">
+      <span class="input-ico">🏁</span>
+      <input id="inp-end" class="route-input" placeholder="Where to?" />
+    </div>
+    <div class="controls-row">
+      <button class="mode-btn active" data-mode="DRIVING"     title="Car">🚗</button>
+      <button class="mode-btn"        data-mode="TWO_WHEELER" title="Bike">🏍</button>
+      <button class="mode-btn"        data-mode="WALKING"     title="Walk">🚶</button>
+      <button class="mode-btn"        data-mode="BICYCLING"   title="Cycle">🚲</button>
+      <button id="btn-go" onclick="doRoute()">Navigate</button>
+    </div>
+  </div>
+  <div id="weather-bar">
+    <div class="wx-label">Current Weather</div>
+    <div class="wx-chips" id="wx-chips"></div>
+    <div class="wx-desc" id="wx-desc"></div>
+  </div>
+  <div id="wx-mode-selector">
+    <div class="wx-mode-label">Route Weather Display</div>
+    <select id="wx-mode-select" onchange="changeWeatherMode()">
+      <option value="summary">Summary Tags</option>
+      <option value="along" selected>Along Route</option>
+      <option value="metrics">Full Metrics</option>
+      <option value="table">Table View</option>
+    </select>
+  </div>
+  <div id="nav-controls">
+    <button id="btn-start-nav" onclick="startNavigation()">Start Navigation</button>
+    <button id="btn-stop-nav" onclick="stopNavigation()" style="display:none">Stop Navigation</button>
+    <button id="btn-toggle-voice" onclick="toggleVoice()">🔊 Voice: ON</button>
+  </div>
+  <div id="hazard-list">
+    <div class="sec-label">Active Hazards</div>
+    <div id="hazard-items"></div>
+  </div>
+  <div id="routes-area">
+    <div class="empty">
+      <div class="empty-ico">🗺️</div>
+      Enter a destination to see<br/>weather-intelligent route options
+    </div>
+  </div>
+</div>
+
+<div id="dir-panel">
+  <div id="dir-hdr">
+    <span class="dir-title">Turn-by-Turn</span>
+    <button id="dir-close" onclick="toggleDir(false)">✕</button>
+  </div>
+  <div id="dir-steps"></div>
+</div>
+
+<div id="streetview-panel">
+  <div id="sv-hdr">
+    <span class="sv-title">🗺️ Street View</span>
+    <button id="sv-close" onclick="toggleStreetView(false)">✕</button>
+  </div>
+  <div id="streetview"></div>
+</div>
+
+<button id="sv-toggle" onclick="toggleStreetView()" style="position: absolute;top: 10px; right: 10px; z-index: 9999; height: 40px;">📍 Street View</button>
+
+<div id="bottom-bar">
+  <div class="bb-stat"><div class="bb-lbl">Distance</div><div class="bb-val" id="bb-dist">—</div></div>
+  <div class="bb-stat"><div class="bb-lbl">Duration</div><div class="bb-val" id="bb-dur">—</div></div>
+  <div class="bb-stat"><div class="bb-lbl">Via</div><div class="bb-val" id="bb-via" style="font-size:12px">—</div></div>
+  <div id="bb-weather"></div>
+  <div id="bb-eta"></div>
+  <button id="btn-steps" onclick="toggleDir(true)">↳ Steps</button>
+</div>
+
+<div id="hazard-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="hazard-icon" id="hazard-icon">⚠️</span>
+      <h3 id="hazard-title">Hazard Detected</h3>
+      <button class="modal-close" onclick="closeHazardModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="hazard-description">A hazard has been detected on your route.</p>
+      <div id="hazard-details"></div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="recalculateRoute()">Find Alternative Route</button>
+      <button onclick="continueCurrentRoute()">Continue Current Route</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ── CONFIG ── Replace with your real OpenWeatherMap API key */
+  const api = {
+    key: "be615c76749d79795b19c09719d9c4b0",
+    base: "https://api.openweathermap.org/data/2.5/"
+  }
+  const OWM_KEY      = api.key;
+  const ROUTE_COLORS = ['#63b3ed', '#68d391', '#f6ad55', '#b794f4'];
+  const ROUTE_NAMES  = ['Route A', 'Route B', 'Route C', 'Route D'];
+
+  let map, dirService;
+  let renderers  = [];
+  let allRoutes  = [];
+  let selRank    = 0;
+  let travelMode = 'DRIVING';
+  let userLoc    = null;
+  let userMarker = null;
+  let dirVisible = false;
+  let weatherDisplayMode = 'along';
+  
+  let voiceEnabled = true;
+  let speechSynthesis = window.speechSynthesis;
+  let currentUtterance = null;
+  let navigationActive = false;
+  let activeHazards = [];
+  let lastHazardCheck = null;
+  let hazardCheckInterval = null;
+  let lastAnnouncedStep = -1;
+  let navigationSteps = [];
+  let lastWeatherUpdate = null;
+  let hazardMarkers = [];
+  let trafficLayer = null;
+  let panorama = null;
+  let streetViewVisible = false;
+  
+  let demoMode = false;
+  let demoInterval = null;
+  let demoProgress = 0;
+  let demoPath = [];
+  let demoSpeed = 50;
+
+  /* ── BOOT: get location first, then load Maps ── */
+  function boot() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => loadMaps(pos.coords.latitude, pos.coords.longitude),
+        ()  => loadMaps(28.6139, 77.2090)
+      );
+    } else {
+      loadMaps(28.6139, 77.2090);
+    }
+  }
+
+  function loadMaps(lat, lng) {
+    window.__pendingLat = lat;
+    window.__pendingLng = lng;
+
+    /* Inject Maps script dynamically so callback fires after DOM is ready */
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js'
+           + '?key=AIzaSyD7B1LSaQlpS4EKQZx3APr3DOpNjcuFG5E'
+           + '&libraries=places'
+           + '&callback=initMap';
+    s.async = true;
+    s.defer = true;
+    document.head.appendChild(s);
+  }
+
+  /* ── MAPS CALLBACK ── called by Google after script loads */
+  function initMap() {
+    const lat = window.__pendingLat;
+    const lng = window.__pendingLng;
+    userLoc = { lat, lng };
+
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat, lng },
+      zoom: 14,
+      disableDefaultUI: true,
+      zoomControl: true,
+      zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+      styles: nightStyles(),
+    });
+
+    userMarker = new google.maps.Marker({
+      position: { lat, lng },
+      map,
+      title: 'You',
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 9,
+        fillColor: '#63b3ed',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2.5,
+      },
+      zIndex: 999,
+    });
+
+    dirService = new google.maps.DirectionsService();
+    
+    trafficLayer = new google.maps.TrafficLayer();
+    
+    panorama = new google.maps.StreetViewPanorama(
+      document.getElementById('streetview'),
+      {
+        position: { lat, lng },
+        pov: { heading: 0, pitch: 0 },
+        zoom: 1,
+        addressControl: false,
+        linksControl: true,
+        panControl: true,
+        enableCloseButton: false,
+        fullscreenControl: false,
+      }
+    );
+    
+    initVoice();
+
+    /* Autocomplete */
+    new google.maps.places.Autocomplete(document.getElementById('inp-start'));
+    new google.maps.places.Autocomplete(document.getElementById('inp-end'));
+    document.getElementById('inp-start').value = 'My Location';
+
+    /* Mode buttons */
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        travelMode = btn.dataset.mode;
+      });
+    });
+
+    /* Live tracking */
+    navigator.geolocation.watchPosition(pos => {
+      userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      userMarker && userMarker.setPosition(userLoc);
+      
+      updateStreetView(userLoc);
+      
+      if (navigationActive) {
+        if (!lastWeatherUpdate || distanceBetween(userLoc, lastWeatherUpdate) > 1000) {
+          fetchCurWeather(userLoc.lat, userLoc.lng);
+          lastWeatherUpdate = {...userLoc};
+        }
+        
+        updateNavigationProgress();
+      }
+    }, null, { enableHighAccuracy: true });
+
+    /* Weather for current position */
+    fetchCurWeather(lat, lng);
+
+    /* Hide loader */
+    setTimeout(() => document.getElementById('loading').classList.add('fade'), 400);
+  }
+
+  /* ── WEATHER ── */
+  async function fetchWeather(lat, lng) {
+    if (!OWM_KEY || OWM_KEY === 'YOUR_OPENWEATHER_API_KEY') return null;
+    try {
+      const r = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OWM_KEY}&units=metric`
+      );
+      const d = await r.json();
+      return (d.cod === 200 || !d.cod) ? d : null;
+    } catch { return null; }
+  }
+
+  async function fetchCurWeather(lat, lng) {
+    const d = await fetchWeather(lat, lng);
+    if (!d) return;
+    const chips = document.getElementById('wx-chips');
+    chips.innerHTML = [
+      chip(wxEmoji(d.weather?.[0]?.main), Math.round(d.main.temp) + '°C'),
+      chip('💧', d.main.humidity + '%'),
+      chip('💨', Math.round(d.wind?.speed || 0) + ' m/s'),
+      chip('👁', ((d.visibility || 10000) / 1000).toFixed(1) + ' km'),
+    ].join('');
+    document.getElementById('wx-desc').textContent =
+      wxEmoji(d.weather?.[0]?.main) + ' ' + (d.weather?.[0]?.description || '');
+    document.getElementById('weather-bar').classList.add('show');
+  }
+
+  function chip(ico, val) {
+    return `<div class="wx-chip"><span>${ico}</span><b>${val}</b></div>`;
+  }
+
+  function initVoice() {
+    if (!('speechSynthesis' in window)) {
+      console.warn('Speech synthesis not supported');
+      voiceEnabled = false;
+      return;
+    }
+    speechSynthesis.getVoices();
+  }
+
+  function speakAlert(text, priority = 'normal') {
+    if (!voiceEnabled) return;
+    
+    if (priority === 'high' && speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    utterance.lang = 'en-US';
+    
+    const voices = speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha'));
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    currentUtterance = utterance;
+    speechSynthesis.speak(utterance);
+  }
+
+  function toggleVoice() {
+    voiceEnabled = !voiceEnabled;
+    if (!voiceEnabled) speechSynthesis.cancel();
+    const btn = document.getElementById('btn-toggle-voice');
+    if (btn) btn.textContent = voiceEnabled ? '🔊 Voice: ON' : '🔇 Voice: OFF';
+    speakAlert(voiceEnabled ? "Voice navigation enabled" : "Voice navigation disabled");
+  }
+
+  function stripHtml(html) {
+    return html.replace(/<[^>]*>/g, '');
+  }
+
+  function showHazardModal(hazard) {
+    document.getElementById('hazard-icon').textContent = hazard.icon || '⚠️';
+    document.getElementById('hazard-title').textContent = hazard.title || 'Hazard Detected';
+    document.getElementById('hazard-description').textContent = hazard.description || '';
+    
+    const details = document.getElementById('hazard-details');
+    if (hazard.severity) {
+      details.innerHTML = `<strong>Severity:</strong> ${hazard.severity.toUpperCase()}<br>`;
+      if (hazard.distance) details.innerHTML += `<strong>Distance:</strong> ${hazard.distance}<br>`;
+      if (hazard.type) details.innerHTML += `<strong>Type:</strong> ${hazard.type}`;
+    } else {
+      details.innerHTML = '';
+    }
+    
+    document.getElementById('hazard-modal').classList.add('show');
+    speakAlert(`Warning: ${hazard.title}. ${hazard.description}`, 'high');
+  }
+
+  function closeHazardModal() {
+    document.getElementById('hazard-modal').classList.remove('show');
+  }
+
+  function recalculateRoute() {
+    closeHazardModal();
+    speakAlert("Calculating alternative route");
+    doRoute();
+  }
+
+  function continueCurrentRoute() {
+    closeHazardModal();
+    speakAlert("Continuing on current route");
+  }
+
+  function distanceBetween(pos1, pos2) {
+    const R = 6371e3;
+    const φ1 = pos1.lat * Math.PI / 180;
+    const φ2 = pos2.lat * Math.PI / 180;
+    const Δφ = (pos2.lat - pos1.lat) * Math.PI / 180;
+    const Δλ = (pos2.lng - pos1.lng) * Math.PI / 180;
+    
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    
+    return R * c;
+  }
+
+  function getRouteBounds(route) {
+    const bounds = new google.maps.LatLngBounds();
+    route.overview_path.forEach(point => bounds.extend(point));
+    return bounds;
+  }
+
+  function findCurrentStep(userPos, steps) {
+    let closestIndex = -1;
+    let minDist = Infinity;
+    
+    steps.forEach((step, i) => {
+      if (i <= lastAnnouncedStep) return;
+      const dist = distanceBetween(userPos, {
+        lat: step.start_location.lat(),
+        lng: step.start_location.lng()
+      });
+      if (dist < minDist && dist < 100) {
+        minDist = dist;
+        closestIndex = i;
+      }
+    });
+    
+    return closestIndex;
+  }
+
+  function startNavigation() {
+    if (!allRoutes || allRoutes.length === 0) {
+      alert('Please calculate a route first');
+      return;
+    }
+    
+    navigationActive = true;
+    lastAnnouncedStep = -1;
+    lastWeatherUpdate = null;
+    
+    document.getElementById('btn-start-nav').style.display = 'none';
+    document.getElementById('btn-stop-nav').style.display = 'block';
+    document.getElementById('nav-controls').classList.add('show');
+    
+    speakAlert('Navigation started');
+    startHazardMonitoring();
+    
+    if (trafficLayer) {
+      trafficLayer.setMap(map);
+    }
+  }
+
+  function stopNavigation() {
+    navigationActive = false;
+    
+    document.getElementById('btn-start-nav').style.display = 'block';
+    document.getElementById('btn-stop-nav').style.display = 'none';
+    
+    if (hazardCheckInterval) {
+      clearInterval(hazardCheckInterval);
+      hazardCheckInterval = null;
+    }
+    
+    clearHazardMarkers();
+    activeHazards = [];
+    document.getElementById('hazard-list').classList.remove('show');
+    
+    if (trafficLayer) {
+      trafficLayer.setMap(null);
+    }
+    
+    speakAlert('Navigation stopped');
+  }
+
+  function clearHazardMarkers() {
+    hazardMarkers.forEach(marker => marker.setMap(null));
+    hazardMarkers = [];
+  }
+
+  function startHazardMonitoring() {
+    hazardCheckInterval = setInterval(checkForHazards, 5000);
+  }
+
+  async function checkForHazards() {
+    if (!navigationActive || !allRoutes[selRank]) return;
+    
+    if (lastHazardCheck && distanceBetween(userLoc, lastHazardCheck) < 100) {
+      return;
+    }
+    
+    lastHazardCheck = {...userLoc};
+    
+    const route = allRoutes[selRank];
+    const weatherHazards = await checkWeatherHazards(route);
+    const trafficHazards = await checkTrafficHazards(route);
+    
+    const newHazards = detectNewHazards([...weatherHazards, ...trafficHazards]);
+    
+    if (newHazards.length > 0) {
+      handleNewHazards(newHazards);
+    }
+  }
+
+  async function checkWeatherHazards(route) {
+    const hazards = [];
+    const weather = route.weather || [];
+    
+    weather.forEach((w, idx) => {
+      if (!w) return;
+      
+      const main = w.weather?.[0]?.main || '';
+      const wind = w.wind?.speed || 0;
+      const vis = w.visibility || 10000;
+      
+      let severity = 'low';
+      let icon = '🌤';
+      let title = '';
+      let description = '';
+      
+      if (main === 'Thunderstorm') {
+        severity = 'critical';
+        icon = '⛈';
+        title = 'Severe Thunderstorm';
+        description = 'Heavy rain and lightning detected on route';
+      } else if (main === 'Snow') {
+        severity = 'high';
+        icon = '❄️';
+        title = 'Snow Conditions';
+        description = 'Snowy conditions may affect driving';
+      } else if (main === 'Rain') {
+        severity = 'medium';
+        icon = '🌧';
+        title = 'Rainy Conditions';
+        description = 'Wet roads ahead, drive carefully';
+      } else if (main === 'Fog' || main === 'Mist') {
+        severity = 'medium';
+        icon = '🌫';
+        title = 'Low Visibility';
+        description = 'Foggy conditions reducing visibility';
+      }
+      
+      if (wind > 15) {
+        severity = severity === 'low' ? 'medium' : severity;
+        title = title || 'High Winds';
+        description = `Strong winds detected: ${Math.round(wind)} m/s`;
+        icon = '💨';
+      }
+      
+      if (vis < 1000) {
+        severity = 'high';
+        title = title || 'Very Low Visibility';
+        description = `Poor visibility: ${(vis / 1000).toFixed(1)} km`;
+        icon = '👁';
+      }
+      
+      if (title) {
+        hazards.push({
+          id: `weather-${idx}-${Date.now()}`,
+          type: 'weather',
+          title,
+          description,
+          severity,
+          icon,
+          location: route.r.overview_path[idx * Math.floor(route.r.overview_path.length / 3)],
+          distance: idx === 0 ? 'Ahead' : idx === 1 ? 'Mid-route' : 'Near destination'
+        });
+      }
+    });
+    
+    return hazards;
+  }
+
+  async function checkTrafficHazards(route) {
+    const hazards = [];
+    
+    if (Math.random() < 0.1) {
+      const path = route.r.overview_path;
+      const midPoint = path[Math.floor(path.length / 2)];
+      
+      hazards.push({
+        id: `traffic-${Date.now()}`,
+        type: 'traffic',
+        title: 'Traffic Incident',
+        description: 'Accident reported ahead causing delays',
+        severity: 'high',
+        icon: '🚧',
+        location: midPoint,
+        distance: '2.5 km ahead'
+      });
+    }
+    
+    return hazards;
+  }
+
+  function detectNewHazards(hazards) {
+    return hazards.filter(h => !activeHazards.some(ah => 
+      ah.id === h.id || (ah.location && h.location && distanceBetween(
+        {lat: ah.location.lat(), lng: ah.location.lng()},
+        {lat: h.location.lat(), lng: h.location.lng()}
+      ) < 50)
+    ));
+  }
+
+  function handleNewHazards(newHazards) {
+    newHazards.forEach(hazard => {
+      activeHazards.push(hazard);
+      addHazardMarker(hazard);
+      
+      if (hazard.severity === 'critical' || hazard.severity === 'high') {
+        showHazardModal(hazard);
+      }
+    });
+    
+    updateHazardList();
+  }
+
+  function updateHazardList() {
+    const container = document.getElementById('hazard-items');
+    const list = document.getElementById('hazard-list');
+    
+    if (activeHazards.length === 0) {
+      list.classList.remove('show');
+      return;
+    }
+    
+    list.classList.add('show');
+    container.innerHTML = activeHazards.map(h => `
+      <div class="hazard-item ${h.severity}" onclick="showHazardModal(${JSON.stringify(h).replace(/"/g, '&quot;')})">
+        <div class="hazard-item-title">${h.icon} ${h.title}</div>
+        <div class="hazard-item-desc">${h.distance || ''}</div>
+      </div>
+    `).join('');
+  }
+
+  function addHazardMarker(hazard) {
+    if (!hazard.location) return;
+    
+    const severityClass = `hazard-${hazard.severity}`;
+    const markerDiv = document.createElement('div');
+    markerDiv.className = `hazard-marker ${severityClass}`;
+    markerDiv.innerHTML = hazard.icon;
+    
+    const marker = new google.maps.Marker({
+      position: hazard.location,
+      map: map,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 16,
+        fillColor: hazard.severity === 'critical' ? '#9333ea' : 
+                   hazard.severity === 'high' ? '#fc8181' :
+                   hazard.severity === 'medium' ? '#f6ad55' : '#fbbf24',
+        fillOpacity: 0.9,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+      },
+      title: hazard.title,
+      zIndex: 100
+    });
+    
+    marker.addListener('click', () => {
+      showHazardModal(hazard);
+    });
+    
+    hazardMarkers.push(marker);
+  }
+
+  function updateNavigationProgress() {
+    if (!navigationActive || !allRoutes[selRank]) return;
+    
+    const route = allRoutes[selRank];
+    const steps = route.leg.steps || [];
+    
+    const currentStepIndex = findCurrentStep(userLoc, steps);
+    
+    if (currentStepIndex !== lastAnnouncedStep && currentStepIndex >= 0) {
+      const step = steps[currentStepIndex];
+      const distance = step.distance?.text || '';
+      const instruction = stripHtml(step.instructions || '');
+      
+      speakAlert(`In ${distance}, ${instruction}`);
+      lastAnnouncedStep = currentStepIndex;
+      
+      if (streetViewVisible && panorama && step.start_location) {
+        const heading = google.maps.geometry.spherical.computeHeading(
+          new google.maps.LatLng(userLoc.lat, userLoc.lng),
+          step.start_location
+        );
+        panorama.setPov({ heading: heading, pitch: 0 });
+      }
+    }
+  }
+
+  function changeWeatherMode() {
+    weatherDisplayMode = document.getElementById('wx-mode-select').value;
+    if (allRoutes.length > 0) {
+      renderCards();
+    }
+  }
+
+  function formatRouteWeatherHtml(weatherArray, mode) {
+    if (!OWM_KEY || OWM_KEY === 'YOUR_OPENWEATHER_API_KEY') {
+      return '<div class="wx-no-data">Add OpenWeather API key for route weather</div>';
+    }
+
+    if (!weatherArray || weatherArray.length === 0) {
+      return '<div class="wx-no-data">Weather data unavailable</div>';
+    }
+
+    const labels = ['Start', 'Mid', 'End'];
+    const points = weatherArray.map((w, i) => ({
+      label: labels[i] || `Point ${i + 1}`,
+      data: w,
+    }));
+
+    if (mode === 'along') {
+      const segments = points.map(p => {
+        if (!p.data) return `<div class="wx-seg"><div class="wx-seg-lbl">${p.label}</div><div class="wx-seg-data"><span class="desc">—</span></div></div>`;
+        const emoji = wxEmoji(p.data.weather?.[0]?.main);
+        const temp = Math.round(p.data.main?.temp || 0);
+        const desc = p.data.weather?.[0]?.description || '';
+        return `<div class="wx-seg">
+          <div class="wx-seg-lbl">${p.label}</div>
+          <div class="wx-seg-data">
+            <span class="emoji">${emoji}</span>
+            <span class="temp">${temp}°C</span>
+            <span class="desc">${desc}</span>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="wx-segments">${segments}</div>`;
+    }
+
+    if (mode === 'metrics') {
+      const metrics = points.map(p => {
+        if (!p.data) return `<div class="wx-metric-point"><div class="wx-metric-hdr">${p.label}</div><div class="wx-metric-chips">${chip('—', 'No data')}</div></div>`;
+        const chips = [
+          chip(wxEmoji(p.data.weather?.[0]?.main), Math.round(p.data.main?.temp || 0) + '°C'),
+          chip('💧', (p.data.main?.humidity || 0) + '%'),
+          chip('💨', Math.round(p.data.wind?.speed || 0) + ' m/s'),
+          chip('👁', ((p.data.visibility || 10000) / 1000).toFixed(1) + ' km'),
+        ].join('');
+        return `<div class="wx-metric-point"><div class="wx-metric-hdr">${p.label}</div><div class="wx-metric-chips">${chips}</div></div>`;
+      }).join('');
+      return `<div class="wx-metrics">${metrics}</div>`;
+    }
+
+    if (mode === 'table') {
+      const rows = points.map(p => {
+        if (!p.data) return `<tr><td>${p.label}</td><td>—</td><td>—</td><td>—</td></tr>`;
+        const emoji = wxEmoji(p.data.weather?.[0]?.main);
+        const temp = Math.round(p.data.main?.temp || 0);
+        const desc = p.data.weather?.[0]?.description || '';
+        const wind = Math.round(p.data.wind?.speed || 0);
+        return `<tr>
+          <td>${p.label}</td>
+          <td><span class="emoji">${emoji}</span> <span class="temp">${temp}°C</span></td>
+          <td>${desc}</td>
+          <td>${wind} m/s</td>
+        </tr>`;
+      }).join('');
+      return `<div class="wx-table"><table>
+        <thead><tr><th>Point</th><th>Temp</th><th>Condition</th><th>Wind</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+    }
+
+    return '';
+  }
+
+  async function fetchRouteWeather(route) {
+    const path = route.overview_path || [];
+    if (!path.length) return [];
+    const idxs = [0, Math.floor(path.length / 2), path.length - 1];
+    const results = await Promise.all(idxs.map(i => fetchWeather(path[i].lat(), path[i].lng())));
+    return results.filter(Boolean);
+  }
+
+  /* ── ROUTING ── */
+  async function doRoute() {
+    const startVal = document.getElementById('inp-start').value.trim();
+    const endVal   = document.getElementById('inp-end').value.trim();
+    if (!endVal) { alert('Please enter a destination.'); return; }
+
+    const origin = (startVal === 'My Location' || !startVal) ? userLoc : startVal;
+
+    if (navigationActive) {
+      stopNavigation();
+    }
+
+    const btn = document.getElementById('btn-go');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Routing…';
+
+    renderers.forEach(r => r.setMap(null));
+    renderers = [];
+    allRoutes = [];
+
+    document.getElementById('routes-area').innerHTML =
+      '<div class="empty"><span class="spin"></span><br/><br/>Finding routes & checking weather…</div>';
+    document.getElementById('bottom-bar').classList.remove('show');
+    toggleDir(false);
+
+    dirService.route(
+      {
+        origin,
+        destination: endVal,
+        travelMode: google.maps.TravelMode[travelMode] || google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: true,
+      },
+      async (result, status) => {
+        btn.disabled = false;
+        btn.textContent = 'Navigate';
+
+        if (status !== 'OK') {
+          document.getElementById('routes-area').innerHTML =
+            `<div class="empty"><div class="empty-ico">⚠️</div>Could not find route<br/><small style="color:var(--text-dim)">${status}</small></div>`;
+          return;
+        }
+
+        const routes = result.routes;
+        const weatherSets = await Promise.all(routes.map(r => fetchRouteWeather(r)));
+
+        allRoutes = routes.map((r, i) => ({
+          r, i,
+          weather: weatherSets[i],
+          score: scoreRoute(r, weatherSets[i]),
+          leg: r.legs[0],
+        }));
+
+        allRoutes.sort((a, b) => b.score.total - a.score.total);
+
+        /* Render each route with its own DirectionsRenderer */
+        routes.forEach((_, origIdx) => {
+          const rnd = new google.maps.DirectionsRenderer({
+            map,
+            directions: result,
+            routeIndex: origIdx,
+            suppressMarkers: false,
+            suppressInfoWindows: true,
+            polylineOptions: {
+              strokeColor: ROUTE_COLORS[origIdx % ROUTE_COLORS.length],
+              strokeOpacity: 0.3,
+              strokeWeight: 4,
+            },
+          });
+          renderers.push(rnd);
+        });
+
+        renderCards();
+        selectRoute(0);
+        
+        document.getElementById('nav-controls').classList.add('show');
+        document.getElementById('sv-toggle').classList.add('show');
+      }
+    );
+  }
+
+  /* ── SCORING ── */
+  function scoreRoute(route, wpts) {
+    const leg    = route.legs[0];
+    const distKm = (leg.distance?.value || 0) / 1000;
+    const durMin = (leg.duration?.value || 0) / 60;
+
+    const distScore = Math.max(0, 40 - distKm * 0.4);
+    const timeScore = Math.max(0, 30 - durMin * 0.25);
+    let wxScore = 30;
+    const details = [];
+
+    wpts.forEach(w => {
+      if (!w?.weather) return;
+      const m    = w.weather[0]?.main || '';
+      const wind = w.wind?.speed || 0;
+      const vis  = w.visibility || 10000;
+      if      (m === 'Thunderstorm') { wxScore -= 15; details.push({ lbl: '⛈ Thunderstorm', cls: 'danger' }); }
+      else if (m === 'Rain')         { wxScore -= 8;  details.push({ lbl: '🌧 Rain',         cls: 'warn'   }); }
+      else if (m === 'Drizzle')      { wxScore -= 4;  details.push({ lbl: '🌦 Drizzle',      cls: 'warn'   }); }
+      else if (m === 'Snow')         { wxScore -= 10; details.push({ lbl: '❄️ Snow',         cls: 'danger' }); }
+      else if (m === 'Fog' || m === 'Mist') { wxScore -= 6; details.push({ lbl: '🌫 Fog',   cls: 'warn'   }); }
+      else if (m === 'Clear')        { details.push({ lbl: '☀️ Clear',  cls: 'good' }); }
+      else if (m === 'Clouds')       { details.push({ lbl: '☁️ Cloudy', cls: ''    }); }
+      if (wind > 10)  { wxScore -= 5; details.push({ lbl: `💨 Wind ${Math.round(wind)} m/s`, cls: 'warn' }); }
+      if (vis < 2000) { wxScore -= 5; details.push({ lbl: '👁 Low visibility', cls: 'danger' }); }
+    });
+
+    wxScore = Math.max(0, wxScore);
+    const seen = new Set();
+    const dedup = details.filter(d => { if (seen.has(d.lbl)) return false; seen.add(d.lbl); return true; });
+
+    return { total: distScore + timeScore + wxScore, wxScore, details: dedup };
+  }
+
+  /* ── RENDER CARDS ── */
+  function renderCards() {
+    const area = document.getElementById('routes-area');
+    const maxS = allRoutes[0].score.total;
+    const minS = allRoutes[allRoutes.length - 1].score.total;
+    const range = maxS - minS || 1;
+
+    const best = allRoutes[0];
+    const rec = buildRec(best);
+
+    let html = `<div class="sec-label">Route Options (${allRoutes.length})</div>
+      <div class="ai-box"><div class="ai-box-lbl">⚡ AI Recommendation</div>${rec}</div>`;
+
+    allRoutes.forEach((rt, rank) => {
+      const cls   = rank === 0 ? 'best' : rank === allRoutes.length - 1 ? 'worst' : 'mid';
+      const badge = rank === 0
+        ? '<span class="rc-badge badge-best">BEST</span>'
+        : rank === allRoutes.length - 1
+        ? '<span class="rc-badge badge-worst">SLOWEST</span>'
+        : '<span class="rc-badge badge-mid">ALT</span>';
+      const pct   = Math.round(((rt.score.total - minS) / range) * 100);
+      const barC  = rank === 0 ? 'var(--best)' : rank === allRoutes.length - 1 ? 'var(--worst)' : 'var(--mid)';
+      const tags  = rt.score.details.slice(0, 4)
+        .map(d => `<span class="wx-tag ${d.cls}">${d.lbl}</span>`).join('');
+      const eta   = toETA(rt.leg.duration?.value || 0);
+
+      const weatherHtml = weatherDisplayMode === 'summary'
+        ? (tags ? `<div class="wx-tags">${tags}</div>` : '')
+        : formatRouteWeatherHtml(rt.weather, weatherDisplayMode);
+
+      html += `
+        <div class="route-card ${cls}" id="rc-${rt.i}" onclick="selectRoute(${rank})">
+          <div class="rc-top"><div class="rc-name">${ROUTE_NAMES[rt.i]}</div>${badge}</div>
+          <div class="rc-stats">
+            <div><div class="stat-lbl">Distance</div><div class="stat-val">${rt.leg.distance?.text || '—'}</div></div>
+            <div><div class="stat-lbl">Duration</div><div class="stat-val">${rt.leg.duration?.text || '—'}</div></div>
+            <div><div class="stat-lbl">ETA</div><div class="stat-val" style="font-size:12px">${eta}</div></div>
+          </div>
+          <div class="score-row">
+            <div class="score-bg"><div class="score-fill" style="width:${pct}%;background:${barC}"></div></div>
+            <div class="score-pct">${pct}%</div>
+          </div>
+          ${weatherHtml}
+        </div>`;
+    });
+
+    area.innerHTML = html;
+  }
+
+  function buildRec(rt) {
+    const bad  = rt.score.details.some(d => d.cls === 'danger');
+    const warn = rt.score.details.some(d => d.cls === 'warn');
+    const good = rt.score.details.some(d => d.cls === 'good');
+    const n    = `<strong>${ROUTE_NAMES[rt.i]}</strong>`;
+    if (bad)  return `${n} is your best option despite some hazardous conditions — drive with caution.`;
+    if (warn) return `${n} offers the best balance. Some weather challenges ahead — allow extra time.`;
+    if (good) return `${n} has great conditions all the way! ${rt.leg.distance?.text} in ${rt.leg.duration?.text}.`;
+    return `${n} — ${rt.leg.distance?.text}, estimated ${rt.leg.duration?.text}.`;
+  }
+
+  /* ── SELECT ROUTE ── */
+  function selectRoute(rank) {
+    selRank = rank;
+    const rt = allRoutes[rank];
+
+    document.querySelectorAll('.route-card').forEach(c => c.classList.remove('sel'));
+    document.getElementById(`rc-${rt.i}`)?.classList.add('sel');
+
+    renderers.forEach((rnd, origIdx) => {
+      const sel = origIdx === rt.i;
+      rnd.setOptions({
+        polylineOptions: {
+          strokeColor:   ROUTE_COLORS[origIdx % ROUTE_COLORS.length],
+          strokeOpacity: sel ? 0.92 : 0.2,
+          strokeWeight:  sel ? 7    : 3,
+          zIndex:        sel ? 10   : 1,
+        },
+      });
+    });
+
+    document.getElementById('bb-dist').textContent = rt.leg.distance?.text || '—';
+    document.getElementById('bb-dur').textContent  = rt.leg.duration?.text || '—';
+    document.getElementById('bb-via').textContent  = ROUTE_NAMES[rt.i];
+    document.getElementById('bb-eta').textContent  = 'ETA ' + toETA(rt.leg.duration?.value || 0);
+    
+    const bbWeather = document.getElementById('bb-weather');
+    if (rt.weather && rt.weather.length > 0 && weatherDisplayMode !== 'summary') {
+      const conditions = rt.weather.filter(Boolean).map(w => {
+        const emoji = wxEmoji(w.weather?.[0]?.main);
+        const temp = Math.round(w.main?.temp || 0);
+        return `${emoji} ${temp}°C`;
+      }).join(' → ');
+      bbWeather.innerHTML = conditions || 'Weather unavailable';
+      bbWeather.style.display = 'flex';
+    } else {
+      bbWeather.style.display = 'none';
+    }
+    
+    document.getElementById('bottom-bar').classList.add('show');
+
+    const steps = rt.leg.steps || [];
+    document.getElementById('dir-steps').innerHTML = steps.length
+      ? steps.map((s, i) => `
+          <div class="step-row">
+            <div class="step-n">${i + 1}</div>
+            <div>
+              <div class="step-txt">${(s.instructions || '').replace(/<[^>]*>/g, '')}</div>
+              <div class="step-d">${s.distance?.text || ''}</div>
+            </div>
+          </div>`).join('')
+      : '<div class="empty" style="padding:20px">No steps available.</div>';
+
+    rt.leg.start_location && map.panTo(rt.leg.start_location);
+  }
+
+  /* ── HELPERS ── */
+  function toETA(secs) {
+    const d = new Date();
+    d.setSeconds(d.getSeconds() + secs);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  function wxEmoji(main = '') {
+    const m = main.toLowerCase();
+    if (m.includes('thunder'))                                return '⛈';
+    if (m.includes('rain') || m.includes('drizzle'))         return '🌧';
+    if (m.includes('snow'))                                   return '❄️';
+    if (m.includes('fog') || m.includes('mist'))              return '🌫';
+    if (m.includes('cloud'))                                  return '☁️';
+    if (m.includes('clear'))                                  return '☀️';
+    return '🌡';
+  }
+  function toggleDir(show) {
+    dirVisible = typeof show === 'boolean' ? show : !dirVisible;
+    document.getElementById('dir-panel').classList.toggle('show', dirVisible);
+  }
+
+  function toggleStreetView(show) {
+    streetViewVisible = typeof show === 'boolean' ? show : !streetViewVisible;
+    document.getElementById('streetview-panel').classList.toggle('show', streetViewVisible);
+    
+    if (streetViewVisible && userLoc) {
+      panorama.setPosition(userLoc);
+    }
+  }
+
+  function updateStreetView(position) {
+    if (streetViewVisible && panorama) {
+      panorama.setPosition(position);
+    }
+  }
+
+  /* ── DEMO MODE ── */
+  function toggleDemoMode() {
+    demoMode = !demoMode;
+    const btn = document.getElementById('btn-demo-mode');
+    const controls = document.getElementById('demo-controls');
+    
+    if (demoMode) {
+      btn.classList.add('active');
+      btn.textContent = '🎮 Exit Demo';
+      controls.classList.add('show');
+      
+      if (!allRoutes || allRoutes.length === 0) {
+        alert('Please calculate a route first, then activate demo mode');
+        demoMode = false;
+        btn.classList.remove('active');
+        btn.textContent = '🎮 Demo Mode';
+        controls.classList.remove('show');
+        return;
+      }
+      
+      startDemo();
+    } else {
+      stopDemo();
+      btn.classList.remove('active');
+      btn.textContent = '🎮 Demo Mode';
+      controls.classList.remove('show');
+    }
+  }
+
+  function startDemo() {
+    if (!allRoutes[selRank]) return;
+    
+    const route = allRoutes[selRank];
+    demoPath = route.r.overview_path;
+    demoProgress = 0;
+    
+    if (!navigationActive) {
+      startNavigation();
+    }
+    
+    speakAlert('Demo mode activated. Simulating navigation.');
+    
+    generateRandomHazardsOnRoute();
+    
+    demoInterval = setInterval(updateDemoPosition, 100);
+  }
+
+  function stopDemo() {
+    if (demoInterval) {
+      clearInterval(demoInterval);
+      demoInterval = null;
+    }
+    demoProgress = 0;
+    updateDemoProgress();
+  }
+
+  function pauseDemo() {
+    const btn = event.target;
+    if (demoInterval) {
+      clearInterval(demoInterval);
+      demoInterval = null;
+      btn.textContent = '▶️ Resume';
+      btn.classList.add('active');
+    } else {
+      demoInterval = setInterval(updateDemoPosition, 100);
+      btn.textContent = '⏸ Pause';
+      btn.classList.remove('active');
+    }
+  }
+
+  function updateDemoSpeed(value) {
+    demoSpeed = parseInt(value);
+    document.getElementById('demo-speed-val').textContent = value;
+  }
+
+  function updateDemoPosition() {
+    if (!demoPath || demoPath.length === 0) return;
+    
+    const step = demoSpeed / 10;
+    demoProgress += step;
+    
+    if (demoProgress >= demoPath.length - 1) {
+      demoProgress = 0;
+      speakAlert('Demo route completed. Restarting.');
+    }
+    
+    const index = Math.floor(demoProgress);
+    const nextIndex = Math.min(index + 1, demoPath.length - 1);
+    const fraction = demoProgress - index;
+    
+    const currentPoint = demoPath[index];
+    const nextPoint = demoPath[nextIndex];
+    
+    const lat = currentPoint.lat() + (nextPoint.lat() - currentPoint.lat()) * fraction;
+    const lng = currentPoint.lng() + (nextPoint.lng() - currentPoint.lng()) * fraction;
+    
+    userLoc = { lat, lng };
+    userMarker.setPosition(userLoc);
+    map.panTo(userLoc);
+    
+    updateStreetView(userLoc);
+    
+    if (navigationActive) {
+      if (!lastWeatherUpdate || distanceBetween(userLoc, lastWeatherUpdate) > 1000) {
+        fetchCurWeather(userLoc.lat, userLoc.lng);
+        lastWeatherUpdate = {...userLoc};
+      }
+      
+      updateNavigationProgress();
+    }
+    
+    updateDemoProgress();
+  }
+
+  function updateDemoProgress() {
+    const percent = demoPath.length > 0 ? Math.round((demoProgress / demoPath.length) * 100) : 0;
+    document.getElementById('demo-progress-fill').style.width = percent + '%';
+    document.getElementById('demo-progress-text').textContent = percent + '%';
+  }
+
+  function generateRandomHazardsOnRoute() {
+    if (!allRoutes[selRank]) return;
+    
+    const route = allRoutes[selRank];
+    const path = route.r.overview_path;
+    const numHazards = Math.floor(Math.random() * 3) + 2;
+    
+    for (let i = 0; i < numHazards; i++) {
+      const randomIndex = Math.floor(Math.random() * path.length);
+      const position = path[randomIndex];
+      
+      const hazardTypes = [
+        { type: 'traffic', icon: '🚧', title: 'Road Construction', description: 'Construction work ahead causing delays', severity: 'medium' },
+        { type: 'traffic', icon: '🚗', title: 'Traffic Accident', description: 'Vehicle collision reported', severity: 'high' },
+        { type: 'traffic', icon: '⚠️', title: 'Road Closure', description: 'Road temporarily closed', severity: 'critical' },
+        { type: 'weather', icon: '🌧', title: 'Heavy Rain', description: 'Intense rainfall affecting visibility', severity: 'medium' },
+        { type: 'weather', icon: '💨', title: 'Strong Winds', description: 'High wind speeds detected', severity: 'medium' },
+        { type: 'traffic', icon: '🚦', title: 'Traffic Congestion', description: 'Heavy traffic ahead', severity: 'low' },
+      ];
+      
+      const hazard = hazardTypes[Math.floor(Math.random() * hazardTypes.length)];
+      
+      const newHazard = {
+        id: `demo-hazard-${Date.now()}-${i}`,
+        type: hazard.type,
+        title: hazard.title,
+        description: hazard.description,
+        severity: hazard.severity,
+        icon: hazard.icon,
+        location: position,
+        distance: `${(Math.random() * 5).toFixed(1)} km ahead`
+      };
+      
+      setTimeout(() => {
+        if (demoMode) {
+          activeHazards.push(newHazard);
+          addHazardMarker(newHazard);
+          updateHazardList();
+          
+          if (newHazard.severity === 'critical' || newHazard.severity === 'high') {
+            showHazardModal(newHazard);
+          } else {
+            speakAlert(`${newHazard.title} detected ahead`);
+          }
+        }
+      }, i * 5000);
+    }
+  }
+
+  function generateRandomHazard() {
+    if (!demoMode || !allRoutes[selRank]) return;
+    
+    const route = allRoutes[selRank];
+    const path = route.r.overview_path;
+    const randomIndex = Math.floor(Math.random() * path.length);
+    const position = path[randomIndex];
+    
+    const hazardTypes = [
+      { type: 'traffic', icon: '🚧', title: 'Emergency Road Work', description: 'Urgent repairs in progress', severity: 'high' },
+      { type: 'traffic', icon: '🚑', title: 'Emergency Vehicle', description: 'Ambulance on route', severity: 'medium' },
+      { type: 'weather', icon: '⛈', title: 'Thunderstorm', description: 'Severe weather approaching', severity: 'critical' },
+      { type: 'traffic', icon: '🛑', title: 'Police Activity', description: 'Police checkpoint ahead', severity: 'medium' },
+    ];
+    
+    const hazard = hazardTypes[Math.floor(Math.random() * hazardTypes.length)];
+    
+    const newHazard = {
+      id: `manual-hazard-${Date.now()}`,
+      type: hazard.type,
+      title: hazard.title,
+      description: hazard.description,
+      severity: hazard.severity,
+      icon: hazard.icon,
+      location: position,
+      distance: `${(Math.random() * 3).toFixed(1)} km ahead`
+    };
+    
+    activeHazards.push(newHazard);
+    addHazardMarker(newHazard);
+    updateHazardList();
+    
+    if (newHazard.severity === 'critical' || newHazard.severity === 'high') {
+      showHazardModal(newHazard);
+    } else {
+      speakAlert(`${newHazard.title} detected`);
+    }
+  }
+
+  /* ── NIGHT MAP STYLES ── */
+  function nightStyles() {
+    return [
+      { elementType: 'geometry',             stylers: [{ color: '#0b0f1e' }] },
+      { elementType: 'labels.text.stroke',   stylers: [{ color: '#0b0f1e' }] },
+      { elementType: 'labels.text.fill',     stylers: [{ color: '#4a5568' }] },
+      { featureType: 'administrative',       elementType: 'geometry',            stylers: [{ color: '#1a2035' }] },
+      { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#8a9cb5' }] },
+      { featureType: 'poi',                  elementType: 'labels.text.fill',    stylers: [{ color: '#4a6070' }] },
+      { featureType: 'poi.park',             elementType: 'geometry',            stylers: [{ color: '#0c1a18' }] },
+      { featureType: 'poi.park',             elementType: 'labels.text.fill',    stylers: [{ color: '#2e5c46' }] },
+      { featureType: 'road',                 elementType: 'geometry',            stylers: [{ color: '#1c2840' }] },
+      { featureType: 'road',                 elementType: 'geometry.stroke',     stylers: [{ color: '#0c1628' }] },
+      { featureType: 'road',                 elementType: 'labels.text.fill',    stylers: [{ color: '#6a8090' }] },
+      { featureType: 'road.highway',         elementType: 'geometry',            stylers: [{ color: '#162a4a' }] },
+      { featureType: 'road.highway',         elementType: 'geometry.stroke',     stylers: [{ color: '#08162e' }] },
+      { featureType: 'road.highway',         elementType: 'labels.text.fill',    stylers: [{ color: '#8aaabe' }] },
+      { featureType: 'transit',              elementType: 'geometry',            stylers: [{ color: '#101828' }] },
+      { featureType: 'transit.station',      elementType: 'labels.text.fill',    stylers: [{ color: '#63b3ed' }] },
+      { featureType: 'water',                elementType: 'geometry',            stylers: [{ color: '#060e1c' }] },
+      { featureType: 'water',                elementType: 'labels.text.fill',    stylers: [{ color: '#304560' }] },
+    ];
+  }
+
+  /* ── START ── */
+  window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
