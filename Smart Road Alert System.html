@@ -473,7 +473,7 @@
     /* Inject Maps script dynamically so callback fires after DOM is ready */
     const s = document.createElement('script');
     s.src = 'https://maps.googleapis.com/maps/api/js'
-           + '?key=AIzaSyD7B1LSaQlpS4EKQZx3APr3DOpNjcuFG5E'
+           + '?key=' /* api key needed here */
            + '&libraries=places'
            + '&callback=initMap';
     s.async = true;
